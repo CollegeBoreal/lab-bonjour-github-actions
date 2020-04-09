@@ -1,0 +1,187 @@
+title: 'Lab GitHub Actions: Bonjour Monde'
+description: Crée une Action GitHub and l'utilise dans une flux de tâches.
+tags:
+  - GitHub Actions
+  - Workflows
+  - Bonjour le monde
+template:
+  name: lab-bonjour-github-actions
+  repo: lab-bonjour-github-actions-gabarit
+before:
+  # protège la branche master
+  - type: updateBranchProtection
+
+  # Ouvre le probleme 1 (bienvenue)
+  - type: createIssue
+    title: Bienvenue
+    body: 00.0_bienvenue.md
+    comments:
+      - 00.1_premiers-pas.md
+    data:
+      dockerfileUrl: "%payload.repository.html_url%/new/master?filename=action-a/Dockerfile"
+
+# Repo artifacts:
+# Issue 1: Bienvenue
+# PR 2: (created by learner) houses the addition of the Dockerfile, entrypoint script, and workflow
+# Issue 3: Congratulations
+
+steps:
+  # 1 - Add a Dockerfile
+  - title: Ajoute un fichier Dockerfile
+    description: Démarre ton action en créant un fichier Dockerfile
+    event: pull_request
+    link: "{{ repoUrl }}/issues/1"
+    actions:
+      - type: gate
+        gates:
+          - left: "%payload.action%"
+            operator: ===
+            right: opened
+          - left: "%payload.action%"
+            operator: ===
+            right: synchronize
+      - type: getTree
+        action_id: tree
+        recursive: true
+        sha: "%payload.pull_request.head.sha%"
+      - type: gate
+        left: "%actions.tree.data.tree%"
+        operator: includes
+        right: path:action-a/Dockerfile
+        else:
+          type: respond
+          with: 01.1_e-pas-de-docker.md
+      - type: respond
+        with: 01.0_succes-docker.md
+        data:
+          actionAUrl: "%payload.repository.html_url%/new/%payload.pull_request.head.ref%?filename=action-a/entrypoint.sh"
+      - type: closeIssue
+        issue: Bienvenue
+
+  # 2 - Add an entrypoint script
+  - title: Ajoute un script entrypoint
+    description: Scripte comment ton action s'éxécutera avec un script entrypoint
+    event: pull_request.synchronize
+    link: "{{ repoUrl }}/pull/2"
+    actions:
+      - type: getTree
+        action_id: tree
+        recursive: true
+        sha: "%payload.pull_request.head.sha%"
+      - type: gate
+        left: "%actions.tree.data.tree%"
+        operator: includes
+        right: path:action-a/entrypoint.sh
+        else:
+          type: respond
+          with: 02.1_e-pas-de-entrypoint.md
+      - type: respond
+        with: 02.0_succes-entrypoint.md
+        data:
+          actionAUrl: "%payload.repository.html_url%/new/%payload.pull_request.head.ref%?filename=action-a/action.yml"
+
+  # 3 - Add action metadata
+  - title: Ajoute un fichier action.yml
+    description: Crée les métadonnées necessaires à l'action
+    event: pull_request.synchronize
+    link: "{{ repoUrl }}/pull/2"
+    actions:
+      - type: getTree
+        action_id: tree
+        recursive: true
+        sha: "%payload.pull_request.head.sha%"
+      - type: gate
+        left: "%actions.tree.data.tree%"
+        operator: includes
+        right: path:action-a/action.yml
+        else:
+          type: respond
+          with: 03.1_e-pas-de-actionyml.md
+      - type: respond
+        with: 03.0_succes-actionyml.md
+        data:
+          worfkflowUrl: "%payload.repository.html_url%/new/%payload.pull_request.head.ref%?filename=.github/workflows/main.yml"
+
+  # 4 - Start your workflow file
+  - title: Démarre ton fichier de flux de tâches
+    description: Faisons que ton flux de tâches démarre avec le fichier de flux de tâches
+    event: pull_request.synchronize
+    link: "{{ repoUrl }}/pull/2"
+    actions:
+      - type: getTree
+        action_id: tree
+        recursive: true
+        sha: "%payload.pull_request.head.sha%"
+      - type: gate
+        left: "%actions.tree.data.tree%"
+        operator: includes
+        right: path:/^.github/workflows/main.yml$/
+        else:
+          type: respond
+          with: 04.1_e-pas-de-flux-taches.md
+      - type: respond
+        with: 04.0_succes-bloc-flux-taches.md
+        data:
+          workflowEditUrl: "%payload.repository.html_url%/edit/%payload.pull_request.head.ref%/.github/workflows/main.yml?pr=/%payload.repository.full_name%/pull/%payload.number%"
+
+  # 5 - Run an action from your workflow file
+  - title: Éxécute une action de ton fichier de flux de tâches
+    description: Specifie une tâche et appelle les actions compris dans fichier de flux de tâches
+    event: pull_request.synchronize
+    link: "{{ repoUrl }}/pull/2"
+    actions:
+      - type: getTree
+        action_id: tree
+        recursive: true
+        sha: "%payload.pull_request.head.sha%"
+      - type: gate
+        left: "%actions.tree.data.tree%"
+        operator: includes
+        right: path:/^.github/workflows/main.yml$/
+        else:
+          type: respond
+          with: 04.1_e-pas-de-flux-taches.md
+      - type: respond
+        with: 05.0_declencheur.md
+
+  # 6 - Trigger the workflow
+  - title: Déclenche le flux de tâches
+    description: Vois ta soumission déclenche le flux de tâches que tu as créé et éxécute ton action
+    event: check_run.completed
+    link: "{{ repoUrl }}/pull/2"
+    actions:
+      - type: gate
+        left: "%payload.check_run.conclusion%"
+        operator: ===
+        right: success
+        else:
+          - type: respond
+            issue: "%payload.check_run.pull_requests.0.number%"
+            with: 06.1_e-pas-d-execution.md
+            data:
+              repo: "%payload.repository.html_url%"
+      - type: createReview
+        pullRequest: "%payload.check_run.pull_requests.0.number%"
+        body: 06.0_succes-flux-taches.md
+        event: APPROVE
+        data:
+          repo: "%payload.repository.html_url%"
+
+  # 7 - Incorporate the action
+  - title: Incorpore le flux de tâches
+    description: Incorpore ta branche pour que le flux de tâches soit incorporée
+    event: pull_request.closed
+    link: "{{ repoUrl }}/pull/2"
+    actions:
+      - type: gate
+        left: "%payload.pull_request.merged%"
+      - type: createIssue
+        title: Félicitations
+        body: 07.0_flux-taches-fini.md
+        data:
+          repo: "%payload.repository.html_url%"
+        action_id: congratsIssue
+      - type: respond
+        with: 07.1_va-vers-fin.md
+        data:
+          url: "%actions.congratsIssue.data.html_url%"
